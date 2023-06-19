@@ -1,5 +1,6 @@
 const express = require('express');
 const multer = require('multer');
+const axios = require('axios');
 const { BlobServiceClient } = require('@azure/storage-blob');
 const cors = require('cors');
 require('dotenv').config(); // Load environment variables from .env file
@@ -26,20 +27,26 @@ const containerClient = blobServiceClient.getContainerClient(CONTAINER_NAME);
 // Upload route
 app.post('/api/upload', upload.single('file'), async (req, res) => {
   console.log('Uploading file:', req.file.originalname);
-try {
-  const file = req.file;
+  try {
+    const file = req.file;
 
-  // Upload the file to Azure Blob Storage
-  const blockBlobClient = containerClient.getBlockBlobClient(file.originalname);
-  const uploadBlobResponse = await blockBlobClient.upload(file.buffer, file.buffer.length);
+    // Upload the file to Azure Blob Storage
+    const blockBlobClient = containerClient.getBlockBlobClient(file.originalname);
+    const uploadBlobResponse = await blockBlobClient.upload(file.buffer, file.buffer.length);
 
-  console.log('File uploaded:', uploadBlobResponse);
-  res.sendStatus(200);
-} catch (error) {
-  console.error('Error uploading file:', error);
-  res.status(500).send('Error uploading file');
-}
+    console.log('File uploaded:', uploadBlobResponse);
+
+    const blobProperties = await blockBlobClient.getProperties();
+    const contentLength = blobProperties.contentLength;
+
+    res.set('Content-Length', contentLength.toString()); // Set the content-length header
+    res.sendStatus(200);
+  } catch (error) {
+    console.error('Error uploading file:', error);
+    res.status(500).send('Error uploading file');
+  }
 });
+
 
 
 // Route for streaming the uploaded video
@@ -69,18 +76,54 @@ async function generateSasToken(filename) {
   return blobClient.url + "?" + sasToken;
 }
 
+
 // Route for streaming the uploaded video
 app.get('/api/stream/:filename', async (req, res) => {
   const filename = req.params.filename;
   console.log('Streaming file:', filename);
   try {
     const sasUrl = await generateSasToken(filename);
-    res.send(sasUrl);
+    
+    const options = {
+      headers: {
+        'Accept-Ranges': 'bytes',
+        'Content-Type': 'video/mp4',
+      },
+    };
+
+    // Check if range headers exist
+    const rangeHeader = req.headers['range'];
+    if (rangeHeader) {
+      const parts = rangeHeader.replace(/bytes=/, '').split('-');
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : undefined;
+
+      // Retrieve video file size
+      const response = await axios.head(sasUrl);
+      const videoSize = response.headers['content-length'];
+
+      options.headers['Content-Range'] = `bytes ${start}-${end || videoSize - 1}/${videoSize}`;
+
+      // Stream the specific range of the video file
+      const streamResponse = await axios.get(sasUrl, {
+        headers: {
+          Range: rangeHeader,
+        },
+        responseType: 'stream',
+      });
+
+      streamResponse.data.pipe(res);
+    } else {
+      // Stream the entire video file
+      const response = await axios.get(sasUrl, { responseType: 'stream' });
+      response.data.pipe(res);
+    }
   } catch (error) {
     console.error('Error streaming file:', error);
     res.status(500).send('Error streaming file');
   }
 });
+
 
 // Start the server
 app.listen(3001, () => {

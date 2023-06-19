@@ -9,6 +9,32 @@ const FileUploadForm = () => {
     setSelectedFile(event.target.files[0]);
   };
 
+
+  // const handleFileUpload = () => {
+  //   const formData = new FormData();
+  //   formData.append('file', selectedFile);
+
+  //   axios
+  //     .post('http://localhost:3001/api/upload', formData)
+  //     .then((response) => {
+  //       // Handle success response
+  //       console.log('File uploaded successfully');
+  //       axios.get(`http://localhost:3001/api/stream/${selectedFile.name}`)
+  //       .then((response) => {
+  //         console.log('Streaming file:', response.data);
+  //         setVideoUrl(response.data);
+  //       })
+  //       .catch((error) => {
+  //         // Handle error
+  //         console.error('Error streaming file:', error);
+  //       });
+  //     })
+  //     .catch((error) => {
+  //       // Handle error
+  //       console.error('Error uploading file:', error);
+  //     });
+  // };
+
   const handleFileUpload = () => {
     const formData = new FormData();
     formData.append('file', selectedFile);
@@ -18,15 +44,7 @@ const FileUploadForm = () => {
       .then((response) => {
         // Handle success response
         console.log('File uploaded successfully');
-        axios.get(`http://localhost:3001/api/stream/${selectedFile.name}`)
-        .then((response) => {
-          console.log('Streaming file:', response.data);
-          setVideoUrl(response.data);
-        })
-        .catch((error) => {
-          // Handle error
-          console.error('Error streaming file:', error);
-        });
+        setVideoUrl(`http://localhost:3001/api/stream/${selectedFile.name}`);
       })
       .catch((error) => {
         // Handle error
